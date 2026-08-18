@@ -1,0 +1,2 @@
+# No third-party dependencies required: this prototype uses only the
+# Python standard library.
