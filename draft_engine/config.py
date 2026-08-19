@@ -74,8 +74,10 @@ class DataConfig:
 
 @dataclass(frozen=True)
 class SearchConfig:
+    root_beam: int = 10
     beam_width: int = 6
-    max_depth: int = 2
+    max_depth: int = 3
+    immediate_weight: float = 0.45
 
 
 @dataclass(frozen=True)

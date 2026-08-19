@@ -104,6 +104,21 @@ class DraftAdvisor:
         self.state = state
         return self
 
+    def for_state(self, state: DraftState) -> "DraftAdvisor":
+        """Return a lightweight advisor clone bound to a different state.
+
+        Expensive data (matchup lookup, positions, synergy) is shared.
+        """
+        clone = DraftAdvisor.__new__(DraftAdvisor)
+        clone.state = state
+        clone.config = self.config
+        clone.positions = self.positions
+        clone.synergy = self.synergy
+        clone._matchup_lookup = self._matchup_lookup
+        clone.max_pro_ban = self.max_pro_ban
+        clone.max_pro_pick = self.max_pro_pick
+        return clone
+
     # ------------------------------------------------------------------
     # Pairwise matchup helpers (O(1))
     # ------------------------------------------------------------------

@@ -19,6 +19,8 @@ shape** (positions 1-3 core, positions 4-5 support).
   assignment caching.
 - **Synergy model** (optional): winrate-when-together learned from recent
   professional matches via OpenDota parsed matches.
+- **Beam-search lookahead**: simulates the next few turns (minimax-style
+  beam pruning) before recommending a move.
 - CLI demo, interactive mode, and a pytest suite.
 
 ## Quick start
@@ -32,6 +34,12 @@ python3 -m draft_engine
 
 # Include same-team pair synergy (downloads pro matches if missing)
 python3 -m draft_engine --demo --synergy
+
+# Enable beam-search lookahead (default depth 3)
+python3 -m draft_engine --demo --lookahead
+
+# Faster/shallower or deeper lookahead
+python3 -m draft_engine --demo --lookahead --lookahead-depth 2
 ```
 
 Refresh cached data:
@@ -65,7 +73,8 @@ draft_engine/
   roles.py         Position 1-5 model, 3-core/2-support feasibility, LRU cache
   scoring.py       Explainable pick/ban scoring engine
   synergy.py       Same-team pair winrate model from pro matches
-  cli.py           Interactive CLI, --demo simulator, --synergy, --log-level
+  lookahead.py     Beam-search lookahead on top of the greedy scorer
+  cli.py           Interactive CLI, --demo simulator, --synergy, --lookahead
 tests/
   unit/integration pytest suite
 cache/             Downloaded data (git-ignored)
@@ -133,13 +142,24 @@ class ScoringWeights:
 
 Adjusting a weight does not require touching scoring code.
 
+## Lookahead
+
+`--lookahead` enables a minimax-style beam search:
+
+- root moves come from the greedy scorer,
+- each root move is simulated forward with `beam_width` moves per turn,
+- our turns keep the best resulting states, enemy turns keep the worst,
+- final score = `0.45 * greedy score + 0.55 * lookahead value`.
+
+Typical runtime: depth 2 ≈ 1s for a full draft, depth 3 ≈ 6s.
+
 ## Known limitations / next steps
 
-- Lookahead search (beam/minimax) is the natural next feature now that
-  `DraftState` is immutable.
 - No opponent/player hero-pool data yet.
 - Public/pro-match samples are directional, not absolute truth.
 - Synergy samples are small; reasons are only shown at `n >= 10`.
+- Lookahead still uses the greedy scorer as its move generator; a trained
+  win-probability model would be a stronger evaluator.
 
 ## License
 

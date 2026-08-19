@@ -2,6 +2,7 @@
 
 Run from the repository root:  python3 scripts/benchmark.py
 """
+
 from __future__ import annotations
 
 import statistics
@@ -45,10 +46,16 @@ def main() -> None:
         advisor.bind(pick_state)
     pick_ms = timeit(lambda: advisor.suggest_picks("radiant", 5))
 
+    from draft_engine.lookahead import LookaheadEngine
+
+    look = LookaheadEngine(advisor)
+    look_ms = timeit(lambda: look.suggest("pick", "radiant", limit=3, depth=2))
+
     print(f"load matchups.json : {load_ms:7.2f} ms")
     print(f"build DraftAdvisor : {build_ms:7.2f} ms")
     print(f"5 ban suggestions  : {ban_ms:7.2f} ms")
     print(f"5 pick suggestions : {pick_ms:7.2f} ms")
+    print(f"3 pick lookahead d2: {look_ms:7.2f} ms")
 
 
 if __name__ == "__main__":

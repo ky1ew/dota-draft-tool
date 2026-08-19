@@ -9,7 +9,7 @@ import sys
 from .data import load_heroes, load_hero_stats, load_matchups
 from .exceptions import DraftEngineError
 from .logging_config import setup_logging
-from .models import DRAFT_ORDERS, DRAFT_ORDER_740, DraftState, Side
+from .models import DRAFT_ORDERS, DRAFT_ORDER_740, DraftState, Side, Turn
 from .roles import fetch_position_roles
 from .scoring import DraftAdvisor, Suggestion
 from .synergy import MATCH_CACHE, fetch_synergy_data, load_synergy_matrix
@@ -47,6 +47,26 @@ def resolve_hero(state: DraftState, query: str) -> int:
         raise HeroNotFoundError(query)
     names = ", ".join(h.display_name for h in partial[:12])
     raise HeroNotFoundError(f"'{query}' (matches: {names})")
+
+
+def suggestions_for(
+    advisor: DraftAdvisor,
+    state: DraftState,
+    turn: Turn,
+    limit: int,
+    lookahead: bool,
+    depth: int | None,
+) -> list[Suggestion]:
+    side = state.team_side(turn.team)
+    if lookahead:
+        from .lookahead import LookaheadEngine
+
+        return LookaheadEngine(advisor).suggest(
+            turn.action, side, limit=limit, depth=depth
+        )
+    if turn.action == "pick":
+        return advisor.suggest_picks(side, limit=limit)
+    return advisor.suggest_bans(side, limit=limit)
 
 
 def build_advisor(args) -> tuple[DraftState, DraftAdvisor]:
@@ -96,10 +116,13 @@ def demo(args) -> int:
         turn = state.current_turn
         assert turn is not None
         side = state.team_side(turn.team)
-        suggestions = (
-            advisor.suggest_bans(side, args.limit)
-            if turn.action == "ban"
-            else advisor.suggest_picks(side, args.limit)
+        suggestions = suggestions_for(
+            advisor,
+            state,
+            turn,
+            args.limit,
+            args.lookahead,
+            args.lookahead_depth,
         )
         if not suggestions:
             logger.error("no legal suggestions at step %s", state.index + 1)
@@ -135,13 +158,18 @@ def interactive(args) -> int:
         turn = state.current_turn
         if turn is None:
             return
-        side = state.team_side(turn.team)
-        suggestions = (
-            advisor.suggest_bans(side, args.limit)
-            if turn.action == "ban"
-            else advisor.suggest_picks(side, args.limit)
+        suggestions = suggestions_for(
+            advisor,
+            state,
+            turn,
+            args.limit,
+            args.lookahead,
+            args.lookahead_depth,
         )
-        print_suggestions(f"Suggested {turn.action}s for {side.upper()}:", suggestions)
+        print_suggestions(
+            f"Suggested {turn.action}s for {state.team_side(turn.team).upper()}:",
+            suggestions,
+        )
 
     print("\nCommands: pick/ban <hero>, suggest, auto, undo, board, reset, quit")
     show_suggestions()
@@ -258,6 +286,17 @@ def main(argv: list[str] | None = None) -> int:
         default="WARNING",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
         help="logging verbosity",
+    )
+    parser.add_argument(
+        "--lookahead",
+        action="store_true",
+        help="enable beam-search lookahead for suggestions",
+    )
+    parser.add_argument(
+        "--lookahead-depth",
+        type=int,
+        default=None,
+        help="override lookahead depth (default 4)",
     )
     parser.add_argument(
         "--synergy",
