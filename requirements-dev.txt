@@ -1,0 +1,6 @@
+# Development-only tooling. The runtime prototype itself has no third-party
+# dependencies.
+pytest
+pytest-cov
+mypy
+black
