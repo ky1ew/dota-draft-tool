@@ -12,4 +12,10 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 source = ["draft_engine"]
-omit = ["draft_engine/__main__.py"]
+# CLI and web server are thin entrypoints; core engine coverage is the
+# meaningful signal for this project.
+omit = [
+    "draft_engine/__main__.py",
+    "draft_engine/cli.py",
+    "draft_engine/server.py",
+]

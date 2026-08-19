@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dota 2 Draft Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">BP</span>
+      <div>
+        <h1>Dota 2 Draft Assistant</h1>
+        <div id="draft-meta" class="muted">loading...</div>
+      </div>
+    </div>
+    <div id="turn-banner" class="turn-banner">loading draft...</div>
+  </header>
+
+  <main>
+    <section class="panel suggestions-panel">
+      <h2 id="suggestions-title">Suggestions</h2>
+      <div id="suggestion-list" class="suggestion-list"></div>
+    </section>
+
+    <section class="board">
+      <div id="radiant-team" class="team radiant"></div>
+      <div class="timeline panel">
+        <h2>Draft order <span class="muted" id="step-label"></span></h2>
+        <div id="order-list" class="order-list"></div>
+      </div>
+      <div id="dire-team" class="team dire"></div>
+    </section>
+
+    <section class="controls panel">
+      <button id="auto-btn" class="btn">Auto move</button>
+      <button id="undo-btn" class="btn btn-ghost">Undo</button>
+      <button id="reset-btn" class="btn btn-danger-ghost">Reset draft</button>
+    </section>
+
+    <section id="lineups" class="lineups"></section>
+
+    <section class="panel heroes-panel">
+      <div class="heroes-toolbar">
+        <h2>Hero pool</h2>
+        <input id="hero-search" type="search" placeholder="Search hero..." autocomplete="off">
+        <div class="role-filters">
+          <button data-role="all" class="chip active">All</button>
+          <button data-role="core" class="chip">Core</button>
+          <button data-role="support" class="chip">Support</button>
+          <button data-role="flex" class="chip">Flex</button>
+        </div>
+      </div>
+      <div id="hero-grid" class="hero-grid"></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -21,6 +21,8 @@ shape** (positions 1-3 core, positions 4-5 support).
   professional matches via OpenDota parsed matches.
 - **Beam-search lookahead**: simulates the next few turns (minimax-style
   beam pruning) before recommending a move.
+- **Web visualizer**: single-page draft board with hero grid, suggestions,
+  timeline, undo/reset/auto, and role assignment.
 - CLI demo, interactive mode, and a pytest suite.
 
 ## Quick start
@@ -40,6 +42,12 @@ python3 -m draft_engine --demo --lookahead
 
 # Faster/shallower or deeper lookahead
 python3 -m draft_engine --demo --lookahead --lookahead-depth 2
+
+# Web visualizer (opens http://127.0.0.1:8000 in your browser)
+python3 -m draft_engine.server --open
+
+# Web visualizer with lookahead + synergy
+python3 -m draft_engine.server --open --lookahead --synergy
 ```
 
 Refresh cached data:
@@ -74,7 +82,11 @@ draft_engine/
   scoring.py       Explainable pick/ban scoring engine
   synergy.py       Same-team pair winrate model from pro matches
   lookahead.py     Beam-search lookahead on top of the greedy scorer
+  server.py        Stdlib HTTP server + JSON API for the visualizer
   cli.py           Interactive CLI, --demo simulator, --synergy, --lookahead
+web/
+  index.html       Single-page draft board
+  static/          styles.css and app.js (vanilla JS, no build step)
 tests/
   unit/integration pytest suite
 cache/             Downloaded data (git-ignored)
