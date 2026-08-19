@@ -157,7 +157,14 @@ class LookaheadEngine:
                 + (1.0 - self.config.immediate_weight) * value
             )
             reasons = root.reasons + (f"lookahead eval {value:+.1f}",)
-            results.append(Suggestion(root.hero, round(combined, 2), reasons[:4]))
+            components = dict(root.components)
+            components["greedy"] = round(self.config.immediate_weight * root.score, 2)
+            components["lookahead"] = round(
+                (1.0 - self.config.immediate_weight) * value, 2
+            )
+            results.append(
+                Suggestion(root.hero, round(combined, 2), reasons[:4], components)
+            )
 
         results.sort(key=lambda s: (-s.score,))
         return results[:limit]

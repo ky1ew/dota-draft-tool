@@ -11,6 +11,22 @@ function heroImage(img) {
   return img.startsWith("http") ? img : CDN + img;
 }
 
+function componentBars(components) {
+  const entries = Object.entries(components || {}).filter(([, v]) => v !== 0);
+  if (!entries.length) return "";
+  const maxAbs = Math.max(...entries.map(([, v]) => Math.abs(v)), 1);
+  return `<div class="score-bars">${entries.map(([key, value]) => {
+    const label = key.replaceAll("_", " ");
+    const pct = Math.min(100, Math.abs(value) / maxAbs * 100);
+    const cls = value >= 0 ? "positive" : "negative";
+    return `<div class="score-bar-row">
+      <span class="bar-label">${label}</span>
+      <span class="bar-track"><span class="bar-fill ${cls}" style="width:${pct}%"></span></span>
+      <span>${value >= 0 ? "+" : ""}${value.toFixed(1)}</span>
+    </div>`;
+  }).join("")}</div>`;
+}
+
 function toast(msg) {
   const el = $("#toast");
   el.textContent = msg;
@@ -101,6 +117,7 @@ function renderSuggestions() {
         <span class="score">${s.score.toFixed(1)}</span>
       </div>
       <ul>${s.reasons.map(r => `<li>${r}</li>`).join("")}</ul>
+      ${componentBars(s.components)}
     </div>`).join("");
   box.querySelectorAll(".suggestion-card").forEach(card => {
     card.addEventListener("click", () => applyHero(Number(card.dataset.hero)));
@@ -164,15 +181,113 @@ function renderHeroes() {
     return `
       <div class="hero-card ${used ? "used" : ""}" data-hero="${h.id}">
         ${used ? `<span class="used-label ${used.side}">${used.action.toUpperCase()}</span>` : ""}
+        <button class="hero-info-btn" data-info="${h.id}" title="Analysis">ⓘ</button>
         <img loading="lazy" src="${heroImage(h.img)}" alt="">
         <div class="hname ${attrClass}" title="${h.name}">${h.name}</div>
-        <div class="hrole">${h.role} · ${h.roles.slice(0, 2).join("/")}</div>
+        <div class="hrole">${h.role}</div>
+        <div class="pos-mini">
+          ${h.pos_probs.map(p => `<span><span class="pfill" style="height:${Math.min(100, p)}%"></span></span>`).join("")}
+        </div>
+        <div class="roleline">core ${h.core_pct}% / sup ${h.support_pct}%</div>
       </div>`;
   }).join("");
 
   grid.querySelectorAll(".hero-card:not(.used)").forEach(card => {
     card.addEventListener("click", () => applyHero(Number(card.dataset.hero)));
   });
+  grid.querySelectorAll(".hero-info-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      openHeroModal(Number(btn.dataset.info));
+    });
+  });
+}
+
+async function openHeroModal(heroId) {
+  const modal = $("#hero-modal");
+  modal.hidden = false;
+  $("#modal-content").innerHTML = "<div class='muted'>Loading analysis...</div>";
+  try {
+    const data = await api(`/api/heroes/${heroId}/analysis`);
+    renderHeroModal(data);
+  } catch (err) {
+    $("#modal-content").innerHTML = `<div class="muted">${err.message}</div>`;
+  }
+}
+
+function closeHeroModal() {
+  $("#hero-modal").hidden = true;
+}
+
+function renderHeroModal(d) {
+  const posBars = d.pos_probs.map((p, i) => `
+    <div class="row">
+      <span>Position ${i + 1}</span>
+      <span style="display:inline-flex;align-items:center;gap:6px">
+        <span class="bar-track" style="width:120px;height:8px;display:inline-block;background:#0d1017;border-radius:4px;overflow:hidden">
+          <span class="bar-fill positive" style="display:block;height:100%;width:${p}%"></span>
+        </span>${p}%
+      </span>
+    </div>`).join("");
+
+  const matchups = d.matchups.length
+    ? d.matchups.map(m => `<div class="row">
+        <span>vs ${m.enemy}</span>
+        <span>${(m.winrate * 100).toFixed(1)}% <small>(${m.games} games)</small></span>
+      </div>`).join("")
+    : '<div class="muted">No enemy heroes revealed yet.</div>';
+
+  const synergies = d.synergies.length
+    ? d.synergies.map(x => `<div class="row">
+        <span>with ${x.ally}</span>
+        <span>${(x.winrate * 100).toFixed(1)}% <small>(${x.games} games)</small></span>
+      </div>`).join("")
+    : '<div class="muted">No allies revealed or synergy data not loaded.</div>';
+
+  const used = d.availability !== "available";
+  const applyDisabled = used || SNAP.done;
+  const shapeWarning = d.action === "pick" && d.shape_valid === false
+    ? '<div class="muted" style="color:var(--dire)">⚠ This pick would make a 3-core / 2-support lineup impossible.</div>'
+    : "";
+
+  $("#modal-content").innerHTML = `
+    <div class="modal-hero-head">
+      <img src="${heroImage(d.img)}" alt="">
+      <div>
+        <h2>${d.name}</h2>
+        <div class="sub">${d.role.toUpperCase()} · core ${d.core_pct}% / support ${d.support_pct}%</div>
+        <div class="sub">Score ${d.score.toFixed(1)} · ${d.meta.pro_ban} pro bans · ${d.meta.pro_pick} pro picks</div>
+      </div>
+    </div>
+    ${shapeWarning}
+    <div class="modal-grid">
+      <div class="modal-section">
+        <h3>Position model (Dirichlet-smoothed)</h3>
+        ${posBars}
+      </div>
+      <div class="modal-section">
+        <h3>Score breakdown (${d.action})</h3>
+        ${componentBars(d.components)}
+        ${d.reasons.length ? `<ul style="margin:8px 0 0 16px;padding:0;font-size:12px">${d.reasons.map(r => `<li>${r}</li>`).join("")}</ul>` : ""}
+      </div>
+      <div class="modal-section">
+        <h3>Matchup vs revealed enemies (shrunk)</h3>
+        ${matchups}
+      </div>
+      <div class="modal-section">
+        <h3>Synergy with revealed allies</h3>
+        ${synergies}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="modal-apply" ${applyDisabled ? "disabled" : ""}>Apply ${d.action}</button>
+      <button class="btn btn-ghost" id="modal-cancel">Close</button>
+    </div>`;
+  $("#modal-apply").addEventListener("click", () => {
+    closeHeroModal();
+    applyHero(d.hero_id);
+  });
+  $("#modal-cancel").addEventListener("click", closeHeroModal);
 }
 
 function applyHero(heroId) {
@@ -191,6 +306,17 @@ function render() {
   $("#undo-btn").disabled = SNAP.step === 0;
   $("#auto-btn").disabled = SNAP.done;
   $("#reset-btn").disabled = SNAP.step === 0;
+  renderEngineStatus();
+}
+
+function renderEngineStatus() {
+  const e = SNAP.engine;
+  $("#engine-status").innerHTML =
+    `<b>${e.mode === "beam_search" ? "beam-search lookahead" : "greedy scorer"}</b>` +
+    (e.mode === "beam_search" ? ` · depth ${e.lookahead_depth} · beam ${e.beam_width}` : "") +
+    ` · ${e.synergy_enabled ? `${e.synergy_pairs} synergy pairs` : "synergy off"}` +
+    `<br>Bayesian shrinkage: (wins + ${e.pseudo_count}×0.5) / (games + ${e.pseudo_count})` +
+    ` · role threshold ${e.role_min_prob}`;
 }
 
 async function init() {
@@ -213,6 +339,10 @@ async function init() {
   $("#undo-btn").addEventListener("click", () => postAction("/api/undo"));
   $("#reset-btn").addEventListener("click", () => {
     if (confirm("Reset the whole draft?")) postAction("/api/reset");
+  });
+  $("#modal-close").addEventListener("click", closeHeroModal);
+  $("#hero-modal").addEventListener("click", e => {
+    if (e.target === $("#hero-modal")) closeHeroModal();
   });
 }
 

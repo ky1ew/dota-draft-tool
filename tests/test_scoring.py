@@ -71,6 +71,33 @@ def test_hero_vs_hero_uses_reverse_matchup(synthetic_state, neutral_matchups):
     assert games == 20
 
 
+def test_pick_components_sum_to_score(
+    synthetic_state, synthetic_positions, neutral_matchups
+):
+    from dataclasses import replace
+
+    state = replace(synthetic_state, index=7)  # first pick turn
+    advisor = make_advisor(state, synthetic_positions, neutral_matchups)
+    suggestions = advisor.suggest_picks("radiant", limit=1)
+    assert suggestions
+    s = suggestions[0]
+    assert s.components
+    assert sum(s.components.values()) == pytest.approx(s.score, abs=0.02)
+
+
+def test_analyze_hero_exposes_model_details(
+    synthetic_state, synthetic_positions, neutral_matchups
+):
+    advisor = make_advisor(synthetic_state, synthetic_positions, neutral_matchups)
+    data = advisor.analyze_hero(1)
+    assert data["hero_id"] == 1
+    assert data["role"] in ("core", "support", "flex")
+    assert len(data["pos_probs"]) == 5
+    assert abs(sum(data["pos_probs"]) - 100) < 5
+    assert "components" in data
+    assert data["action"] == "ban"  # first turn is a ban
+
+
 def test_no_pick_when_draft_complete(
     synthetic_state, synthetic_positions, neutral_matchups
 ):

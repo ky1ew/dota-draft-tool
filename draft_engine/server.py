@@ -85,6 +85,7 @@ class DraftSession:
                 "role": role_kind(self.advisor.position_probs(s.hero.id)),
                 "score": s.score,
                 "reasons": list(s.reasons),
+                "components": s.components,
                 "img": self.images.get(s.hero.id, ""),
             }
             for s in suggestions
@@ -106,6 +107,9 @@ class DraftSession:
                     "roles": list(hero.roles),
                     "cm_enabled": hero.cm_enabled,
                     "role": role_kind(probs),
+                    "pos_probs": [round(p * 100, 1) for p in probs],
+                    "core_pct": round(sum(probs[:3]) * 100, 1),
+                    "support_pct": round(sum(probs[3:]) * 100, 1),
                     "img": self.images.get(hero.id, ""),
                     "pro_ban": stats.pro_ban,
                     "pro_pick": stats.pro_pick,
@@ -132,6 +136,12 @@ class DraftSession:
         ]
         cores = sum(1 for p in positions if p["role"] == "core")
         return {"positions": positions, "cores": cores, "supports": 5 - cores}
+
+    def analyze_hero(self, hero_id: int) -> dict[str, Any]:
+        with self.lock:
+            data = self.advisor.analyze_hero(hero_id)
+        data["img"] = self.images.get(hero_id, "")
+        return data
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
@@ -172,10 +182,24 @@ class DraftSession:
                 ]
                 return {"picks": picks, "bans": bans}
 
+            synergy_pairs = sum(len(v) for v in self.advisor.synergy.values())
             return {
                 "step": state.index,
                 "total": len(state.order),
                 "done": state.done,
+                "engine": {
+                    "mode": "beam_search" if self.lookahead else "greedy",
+                    "lookahead_depth": self.lookahead_depth,
+                    "beam_width": self.advisor.config.search.beam_width,
+                    "root_beam": self.advisor.config.search.root_beam,
+                    "immediate_weight": self.advisor.config.search.immediate_weight,
+                    "synergy_enabled": bool(self.advisor.synergy),
+                    "synergy_pairs": synergy_pairs,
+                    "pseudo_count": self.advisor.config.matchup.pseudo_count,
+                    "matchup_rows": len(self.advisor._matchup_lookup),
+                    "role_min_prob": self.advisor.config.roles.min_role_prob,
+                    "min_position_prob": self.advisor.config.roles.min_position_prob,
+                },
                 "first_pick_side": state.first_pick_side,
                 "turn": (
                     {
@@ -270,6 +294,18 @@ class ApiHandler(BaseHTTPRequestHandler):
         path = self.path.split("?", 1)[0]
         if path == "/api/state":
             self._json(self.session.snapshot())
+            return
+        if path.startswith("/api/heroes/") and path.endswith("/analysis"):
+            raw_id = path.split("/")[3]
+            try:
+                hero_id = int(raw_id)
+            except ValueError:
+                self._error(HTTPStatus.BAD_REQUEST, "invalid hero id")
+                return
+            try:
+                self._json(self.session.analyze_hero(hero_id))
+            except KeyError:
+                self._error(HTTPStatus.NOT_FOUND, "unknown hero id")
             return
         if path in ("/", "/index.html"):
             self._serve_file(WEB_DIR / "index.html")

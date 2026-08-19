@@ -22,11 +22,12 @@ captain can decide whether they agree with the machine.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 from .config import DEFAULT_CONFIG, EngineConfig, ScoringWeights
 from .exceptions import SuggestionError
-from .models import DraftState, Hero, HeroStats, Side
+from .models import Action, DraftState, Hero, HeroStats, Side
 from .roles import (
     best_assignment,
     can_finish_roster_shape,
@@ -61,6 +62,7 @@ class Suggestion:
     hero: Hero
     score: float
     reasons: tuple[str, ...]
+    components: dict[str, float] = field(default_factory=dict)
 
 
 class DraftAdvisor:
@@ -331,7 +333,7 @@ class DraftAdvisor:
     ) -> Suggestion:
         w = self.config.scoring
         stats = self.state.hero_stats[hero.id]
-        score = 0.0
+        components: dict[str, float] = {}
         reasons: list[str] = []
         min_games = self.config.matchup.min_games_for_reason
 
@@ -342,7 +344,8 @@ class DraftAdvisor:
             counter_edges.append((wr - 0.5, games, self.state.hero_name(eid)))
         if counter_edges:
             avg_edge = sum(e[0] for e in counter_edges) / len(counter_edges)
-            score += avg_edge * 100.0 * (w.matchup_edge / 100.0)
+            counter_pts = avg_edge * 100.0 * (w.matchup_edge / 100.0)
+            components["matchup"] = round(counter_pts, 2)
             worst = min(counter_edges, key=lambda e: e[0])
             if worst[0] <= -0.04 and worst[1] >= min_games:
                 reasons.append(
@@ -361,7 +364,8 @@ class DraftAdvisor:
                 synergy_edges.append((wr - 0.5, games, self.state.hero_name(aid)))
             if synergy_edges:
                 avg_edge = sum(e[0] for e in synergy_edges) / len(synergy_edges)
-                score += avg_edge * 100.0 * (w.team_synergy / 100.0)
+                synergy_pts = avg_edge * 100.0 * (w.team_synergy / 100.0)
+                components["synergy"] = round(synergy_pts, 2)
                 good = [e for e in synergy_edges if e[0] >= 0.04 and e[1] >= min_games]
                 for edge, games, name in sorted(good, reverse=True)[:1]:
                     reasons.append(
@@ -370,19 +374,19 @@ class DraftAdvisor:
 
         # 2. Core/support lineup shape (positions 1-5).
         shape_points, shape_reasons = self._role_contribution(hero, team_picks)
-        score += shape_points
+        components["position"] = round(shape_points, 2)
         reasons.extend(shape_reasons)
 
         # 3. Early-pick flexibility (Io, Windranger, etc.).
         flex_points, flex_reasons = self._flex_early_bonus(hero, team_picks)
-        score += flex_points
+        components["flexibility"] = round(flex_points, 2)
         reasons.extend(flex_reasons)
 
         # 4. Missing role tags (stun/initiation/waveclear/durable etc.).
         role_gain = self._team_role_gain(hero, team_picks)
         if role_gain > 0:
             pts = role_gain * w.role_tag_gain
-            score += pts
+            components["role_tags"] = round(pts, 2)
             if pts >= 5:
                 missing = []
                 current = self._role_tag_counts(team_picks)
@@ -394,7 +398,7 @@ class DraftAdvisor:
 
         # 5. Meta strength.
         meta_pts, meta_reasons = self.meta_score(stats)
-        score += meta_pts
+        components["meta"] = round(meta_pts, 2)
         reasons.extend(meta_reasons[:1])
 
         # Make sure every suggestion explains at least something.
@@ -406,7 +410,13 @@ class DraftAdvisor:
             else:
                 reasons.append("situational pick")
 
-        return Suggestion(hero=hero, score=round(score, 2), reasons=tuple(reasons[:4]))
+        total = round(sum(components.values()), 2)
+        return Suggestion(
+            hero=hero,
+            score=total,
+            reasons=tuple(reasons[:4]),
+            components=components,
+        )
 
     # ------------------------------------------------------------------
     # Ban scoring
@@ -416,7 +426,7 @@ class DraftAdvisor:
     ) -> Suggestion:
         w = self.config.scoring
         stats = self.state.hero_stats[hero.id]
-        score = 0.0
+        components: dict[str, float] = {}
         reasons: list[str] = []
         min_games = self.config.matchup.min_games_for_reason
 
@@ -428,7 +438,7 @@ class DraftAdvisor:
         if threats:
             threat = max(threats, key=lambda t: t[0])
             pts = max(0.0, threat[0]) * 100.0 * (w.ban_counter_threat / 100.0)
-            score += pts
+            components["counter_threat"] = round(pts, 2)
             if pts >= 4 and threat[1] >= min_games:
                 reasons.append(
                     f"counters our {threat[2]} ({(threat[0] + 0.5):.0%}, n={threat[1]})"
@@ -442,7 +452,8 @@ class DraftAdvisor:
                 synergy_edges.append((wr - 0.5, games, self.state.hero_name(eid)))
             if synergy_edges:
                 avg_edge = sum(e[0] for e in synergy_edges) / len(synergy_edges)
-                score += max(0.0, avg_edge) * 100.0 * (w.ban_enemy_synergy / 100.0)
+                pts = max(0.0, avg_edge) * 100.0 * (w.ban_enemy_synergy / 100.0)
+                components["enemy_synergy"] = round(pts, 2)
                 good = [e for e in synergy_edges if e[0] >= 0.05 and e[1] >= min_games]
                 for edge, games, name in sorted(good, reverse=True)[:1]:
                     reasons.append(
@@ -453,19 +464,20 @@ class DraftAdvisor:
         # 2. Deny a hero that fits the positions the enemy still needs.
         if enemy_picks:
             enemy_gain, enemy_reason = self._role_contribution(hero, enemy_picks)
-            score += max(0.0, enemy_gain) * w.ban_position_denial_multiplier
+            pts = max(0.0, enemy_gain) * w.ban_position_denial_multiplier
+            components["position_denial"] = round(pts, 2)
             if enemy_gain >= 6 and enemy_reason:
                 reasons.append("denies a position the enemy still needs")
         else:
             # Early ban phase: flexible heroes are the most likely to be
             # contested by either side.
-            score += (
-                position_entropy(self.position_probs(hero.id)) * w.ban_early_entropy
-            )
+            pts = position_entropy(self.position_probs(hero.id)) * w.ban_early_entropy
+            components["early_flex"] = round(pts, 2)
 
         # 3. Meta ban priority.
         meta_pts, meta_reasons = self.meta_score(stats)
-        score += meta_pts * w.ban_meta_multiplier
+        pts = meta_pts * w.ban_meta_multiplier
+        components["meta"] = round(pts, 2)
         for r in meta_reasons[:1]:
             if "ban priority" in r:
                 reasons.append(r)
@@ -476,14 +488,20 @@ class DraftAdvisor:
         role_gain = self._team_role_gain(hero, enemy_picks)
         if role_gain > 0:
             pts = role_gain * w.ban_role_tag_gain
-            score += pts
+            components["role_tags"] = round(pts, 2)
             if pts >= 3:
                 reasons.append("denies initiation/disable coverage")
 
         if not reasons:
             reasons.append("meta-consistency ban")
 
-        return Suggestion(hero=hero, score=round(score, 2), reasons=tuple(reasons[:4]))
+        total = round(sum(components.values()), 2)
+        return Suggestion(
+            hero=hero,
+            score=total,
+            reasons=tuple(reasons[:4]),
+            components=components,
+        )
 
     # ------------------------------------------------------------------
     # Public API
@@ -521,6 +539,101 @@ class DraftAdvisor:
         if not suggestions:
             raise SuggestionError("no legal ban is available")
         return suggestions[0]
+
+    # ------------------------------------------------------------------
+    # Per-hero analysis (used by the web visualizer)
+    # ------------------------------------------------------------------
+    def analyze_hero(
+        self,
+        hero_id: int,
+        side: Side | None = None,
+        action: Action | None = None,
+    ) -> dict:
+        hero = self.state.heroes[hero_id]
+        probs = self.position_probs(hero.id)
+        kind = role_kind(probs)
+        turn = self.state.current_turn
+        side = side or (
+            self.state.team_side(turn.team) if turn is not None else "radiant"
+        )
+        action = action or (turn.action if turn is not None else "pick")
+        enemy_side: Side = "dire" if side == "radiant" else "radiant"
+        my_picks = self.state.side_picks(side)
+        enemy_picks = self.state.side_picks(enemy_side)
+
+        availability = "available"
+        for check_side in ("radiant", "dire"):
+            if hero.id in self.state.side_picks(check_side):
+                availability = f"picked_{check_side}"
+            elif hero.id in self.state.side_bans(check_side):
+                availability = f"banned_{check_side}"
+
+        meta_pts, meta_reasons = self.meta_score(self.state.hero_stats[hero.id])
+
+        matchups: list[dict[str, Any]] = []
+        for eid in enemy_picks:
+            wr, games = self.hero_vs_hero(hero.id, eid)
+            matchups.append(
+                {
+                    "enemy_id": eid,
+                    "enemy": self.state.hero_name(eid),
+                    "winrate": round(wr, 4),
+                    "games": games,
+                    "edge": round(wr - 0.5, 4),
+                }
+            )
+        matchups.sort(key=lambda row: row["edge"])
+
+        synergies: list[dict[str, Any]] = []
+        for aid in my_picks:
+            wr, games = self.hero_with_hero(hero.id, aid)
+            synergies.append(
+                {
+                    "ally_id": aid,
+                    "ally": self.state.hero_name(aid),
+                    "winrate": round(wr, 4),
+                    "games": games,
+                    "edge": round(wr - 0.5, 4),
+                }
+            )
+        synergies.sort(key=lambda row: -row["edge"])
+
+        if action == "pick":
+            suggestion = self._pick_score(hero, my_picks, enemy_picks)
+            shape_valid = self._candidate_shape_valid(hero, my_picks)
+        else:
+            suggestion = self._ban_score(hero, my_picks, enemy_picks)
+            shape_valid = None
+
+        after = my_picks + (hero.id,)
+        lineup_after = self.lineup_quality(after) if len(after) <= 5 else None
+
+        return {
+            "hero_id": hero.id,
+            "name": hero.display_name,
+            "action": action,
+            "side": side,
+            "availability": availability,
+            "role": kind,
+            "core_pct": round(sum(probs[:3]) * 100, 1),
+            "support_pct": round(sum(probs[3:]) * 100, 1),
+            "pos_probs": [round(p * 100, 1) for p in probs],
+            "score": suggestion.score,
+            "reasons": list(suggestion.reasons),
+            "components": suggestion.components,
+            "shape_valid": shape_valid,
+            "lineup_quality_after": (
+                round(lineup_after, 3) if lineup_after is not None else None
+            ),
+            "meta": {
+                "score": round(meta_pts, 2),
+                "reasons": meta_reasons,
+                "pro_ban": self.state.hero_stats[hero.id].pro_ban,
+                "pro_pick": self.state.hero_stats[hero.id].pro_pick,
+            },
+            "matchups": matchups,
+            "synergies": synergies,
+        }
 
     # ------------------------------------------------------------------
     # Final lineup report

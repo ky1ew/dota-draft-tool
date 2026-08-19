@@ -40,3 +40,5 @@ def test_draft_session_snapshot_shape():
     assert len(snap["heroes"]) == 127
     assert len(snap["suggestions"]["items"]) == 5
     assert len(snap["order"]) == 24
+    assert snap["engine"]["mode"] in ("greedy", "beam_search")
+    assert snap["suggestions"]["items"][0]["components"]

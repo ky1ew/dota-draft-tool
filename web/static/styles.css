@@ -218,3 +218,85 @@ main {
   .order-list { grid-template-columns: repeat(8, 1fr); }
   .topbar { flex-direction: column; align-items: flex-start; }
 }
+
+/* Engine status / algorithm transparency */
+.controls .spacer { flex: 1; }
+.engine-status {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: right;
+}
+.engine-status b { color: var(--text); }
+
+/* Score component bars */
+.score-bars { margin-top: 8px; display: grid; gap: 4px; }
+.score-bar-row {
+  display: grid;
+  grid-template-columns: 86px 1fr 34px;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.score-bar-row .bar-label { color: var(--muted); text-align: right; }
+.score-bar-row .bar-track {
+  height: 6px; background: #0d1017; border-radius: 3px; overflow: hidden;
+}
+.score-bar-row .bar-fill {
+  height: 100%; border-radius: 3px;
+}
+.bar-fill.positive { background: var(--radiant); }
+.bar-fill.negative { background: var(--dire); }
+
+/* Hero position distribution on cards */
+.pos-mini { display: flex; gap: 1px; height: 5px; margin-top: 5px; }
+.pos-mini span {
+  flex: 1; border-radius: 1px; background: #0d1017; position: relative;
+}
+.pos-mini span .pfill {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(180deg, var(--accent), #6c4dff);
+  border-radius: 1px;
+}
+.hero-card .roleline { font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+/* Hero info button */
+.hero-info-btn {
+  position: absolute; left: 4px; top: 4px;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: none; background: #000000aa; color: var(--muted);
+  cursor: pointer; font-size: 11px; line-height: 1;
+}
+.hero-info-btn:hover { color: #fff; }
+
+/* Modal */
+.modal {
+  position: fixed; inset: 0; background: rgba(4, 7, 12, .78);
+  display: grid; place-items: center; z-index: 50; padding: 20px;
+}
+.modal-card {
+  width: min(760px, 100%);
+  max-height: 90vh; overflow: auto;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px; position: relative;
+}
+.modal-close {
+  position: absolute; top: 10px; right: 10px;
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+}
+.modal-close:hover { color: #fff; border-color: #fff; }
+
+.modal-hero-head { display: flex; gap: 14px; align-items: center; }
+.modal-hero-head img { width: 120px; height: 70px; object-fit: cover; border-radius: 8px; }
+.modal-hero-head h2 { margin: 0; }
+.modal-hero-head .sub { color: var(--muted); font-size: 12px; }
+
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.modal-section { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; }
+.modal-section h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.modal-section .row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+.modal-section .row span:last-child { color: var(--muted); }
+.bar-big { height: 10px; background: #0d1017; border-radius: 5px; overflow: hidden; margin: 6px 0 2px; }
+.bar-big .fill { height: 100%; background: linear-gradient(90deg, var(--accent), #6c4dff); }
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; }
+@media (max-width: 700px) { .modal-grid { grid-template-columns: 1fr; } }

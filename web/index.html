@@ -37,6 +37,8 @@
       <button id="auto-btn" class="btn">Auto move</button>
       <button id="undo-btn" class="btn btn-ghost">Undo</button>
       <button id="reset-btn" class="btn btn-danger-ghost">Reset draft</button>
+      <span class="spacer"></span>
+      <div id="engine-status" class="engine-status muted"></div>
     </section>
 
     <section id="lineups" class="lineups"></section>
@@ -57,6 +59,14 @@
   </main>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="hero-modal" class="modal" hidden>
+    <div class="modal-card">
+      <button id="modal-close" class="modal-close">✕</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

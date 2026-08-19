@@ -154,6 +154,19 @@ class ScoringWeights:
 
 Adjusting a weight does not require touching scoring code.
 
+## Web visualizer
+
+The page is not just a draft board — it exposes the model internals:
+
+- every suggestion card shows the **score decomposition**
+  (matchup / synergy / position / flexibility / role tags / meta),
+- every hero card shows its **position distribution** and core/support ratio,
+- clicking the ⓘ on a hero opens a modal with Bayesian-shrunk matchup
+  winrates, synergy samples, position probabilities and the full scoring
+  breakdown,
+- the header shows whether the engine is running greedy scoring or
+  beam-search lookahead, plus the shrinkage formula and thresholds.
+
 ## Lookahead
 
 `--lookahead` enables a minimax-style beam search:
