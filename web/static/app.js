@@ -322,6 +322,12 @@ function renderEngineStatus() {
 async function init() {
   SNAP = await api("/api/state");
   render();
+  // Defensive: the modal must never be visible before the user opens it.
+  const modal = $("#hero-modal");
+  modal.hidden = true;
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeHeroModal();
+  });
 
   $("#hero-search").addEventListener("input", e => {
     searchText = e.target.value;
